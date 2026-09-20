@@ -45,6 +45,7 @@ UIViewController *SGAboutPage(void) {
             }, ^{ SGCheckForUpdate(YES); }),
             SGStatRow(@"Version", ^NSString *{ return @(SG_VERSION); }),
             SGStatRow(@"Spotify", ^NSString *{ return spotify; }),
+            SGStatRow(@"Fork", ^NSString *{ return @"marwannsaz"; }),
         ]),
         SGSection(nil, @[
             withSymbol(SGLinkRow(@"Website", @"Features, and how to build it yourself", SGSiteURL), @"safari"),

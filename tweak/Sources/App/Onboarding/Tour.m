@@ -223,7 +223,9 @@ static UIButton *glassButton(NSString *title) {
     _primary = glassButton(@"Start listening");
     [_primary addTarget:self action:@selector(finish) forControlEvents:UIControlEventTouchUpInside];
     UILabel *footer = [UILabel new];
-    footer.text = @"Hold Home to open settings.";
+    // Two lines, and no height of its own: the button above moves up to make room.
+    footer.numberOfLines = 0;
+    footer.text = @"Hold Home to open settings.\nForked by marwannsaz.";
     footer.font = [UIFont systemFontOfSize:13];
     footer.textColor = SGGrey();
     footer.textAlignment = NSTextAlignmentCenter;
