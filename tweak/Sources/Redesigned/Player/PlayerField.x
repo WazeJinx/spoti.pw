@@ -14,6 +14,11 @@
 // the ones out of view hidden). Until the first picture has been read the field takes the colour
 // Spotify already has for the player, from -[NPVBackgroundViewController
 // backgroundViewModel:didChangeColor:playerState:] (objc-methods.txt:57949).
+//
+// Canvas is the one thing that wants the same room: Spotify's looping video for the track. The switch
+// (SGRKeyCanvas, on until switched off) decides whether the redesign forces it off as it does the rest
+// of the player's flags, and while one plays the field fades out under it and comes back when it goes,
+// so a track with a Canvas shows the video and a track without still gets the field.
 #import "Core/SGCore.h"
 #import "Settings/SGModPage.h"
 #import "Redesigned/Kit/SGRKit.h"
@@ -28,6 +33,8 @@ static const CGFloat kCoverMinWidth = 200;
 static char kFieldKey, kCoverImageKey;
 static __weak SGRArtworkField *sg_field;
 static __weak UIScrollView *sg_coverList;
+// The Canvas cell on screen while one plays, nil when none is (the Canvas group below).
+static __weak UIView *sg_canvasCell;
 static __weak UIImage *sg_lastCover;
 static NSString *sg_lastCoverURI;
 // Spotify's colour for the player, which can arrive before the plane has laid out once.
@@ -43,6 +50,18 @@ static void showArtwork(SGRArtworkField *field, BOOL animated) {
     NSString *identity = nil;
     UIImage *image = SGRNowPlayingArtwork(NULL, &identity);
     if (field && image) [field setArtwork:image identity:identity animated:animated];
+}
+
+// Canvas plays where the field is, so the two cannot both be on: the field fades out under a Canvas and
+// comes back when it goes. The cell is held weakly, so one that is let go without a last window callback
+// leaves the field on again at the next layout of the plane rather than a blank background.
+static void syncCanvas(void) {
+    SGRArtworkField *field = sg_field;
+    if (!field) return;
+    UIView *cell = sg_canvasCell;
+    CGFloat wanted = (cell && cell.window && !cell.hidden && cell.alpha > 0.01) ? 0 : 1;
+    if (fabs(field.alpha - wanted) < 0.01) return;
+    [UIView animateWithDuration:0.3 animations:^{ field.alpha = wanted; }];
 }
 
 static SGRArtworkField *fieldIn(UIView *plane) {
@@ -71,6 +90,7 @@ static SGRArtworkField *fieldIn(UIView *plane) {
     if (field.superview != plane) [plane addSubview:field];
     else if (plane.subviews.lastObject != field) [plane bringSubviewToFront:field];
     if (!CGRectEqualToRect(field.frame, plane.bounds)) field.frame = plane.bounds;
+    syncCanvas();
 }
 
 - (void)backgroundViewModel:(id)model didChangeColor:(id)color playerState:(id)state {
@@ -147,11 +167,35 @@ static void publishCover(void) {
 
 static SGRPlayerCoverWatcher *sg_coverWatcher;
 
+#pragma mark - Canvas
+
+// Installed only while the switch is on, so a build with Canvas off carries no hook for it at all. The
+// cell is Spotify's own (_TtC17Canvas_CommonImpl20CanvasNowPlayingCell, Canvas_CommonImpl/
+// CanvasNowPlayingCell.swift in the binary); both callbacks are UIView's, and each one only records
+// the cell and lets syncCanvas() decide.
+%group Canvas
+%hook _TtC17Canvas_CommonImpl20CanvasNowPlayingCell
+- (void)didMoveToWindow {
+    %orig;
+    sg_canvasCell = (UIView *)self;
+    syncCanvas();
+}
+
+- (void)layoutSubviews {
+    %orig;
+    sg_canvasCell = (UIView *)self;
+    syncCanvas();
+}
+%end
+%end
+
+SGModRow *SGRCanvasRow(void) {
+    return SGWithSymbol(SGSwitchRow(@"Canvas", @"Spotify's looping video behind the artwork. The field steps aside while one plays.", SGRKeyCanvas), @"play.rectangle");
+}
+
 %ctor {
     // Registered whatever the switch says: the flag rows elsewhere lock to these while it is on.
     NSMutableDictionary<NSString *, id> *flags = [@{
-        // The artwork is the picture; Canvas video would cover the field and the corners.
-        @"ios-feature-canvas.canvas_enabled": @NO,
         // The header, slider and sheets the trees were recorded with (trees/clean/player/01.txt:122
         // id=Context menu, :216 SPTNowPlayingSliderV2).
         @"ios-feature-nowplaying.new_redesign_header_with_context_menu_enabled": @YES,
@@ -169,6 +213,10 @@ static SGRPlayerCoverWatcher *sg_coverWatcher;
                             @"world_cup_easter_egg"]) {
         flags[[@"ios-feature-nowplaying." stringByAppendingString:egg]] = @NO;
     }
+    // Canvas is the one flag here the switch decides. Off, it joins the rest and is forced off, which
+    // locks its row on the All flags page too; on, nothing forces it and Spotify's own value stands.
+    BOOL canvas = SGEnabled(SGRKeyCanvas);
+    if (!canvas) flags[@"ios-feature-canvas.canvas_enabled"] = @NO;
     SGRedesignForceFlags(@"player", flags);
     if (!SGRedesignedUI()) return;
     %init;
@@ -177,8 +225,13 @@ static SGRPlayerCoverWatcher *sg_coverWatcher;
     [NSNotificationCenter.defaultCenter addObserverForName:SGRNowPlayingArtworkDidChangeNotification object:nil queue:nil usingBlock:^(NSNotification *note) {
         showArtwork(sg_field, YES);
     }];
-    SGRequireClasses(@[
+    NSMutableArray<NSString *> *classes = [@[
         @"_TtC21NowPlaying_ScrollImpl27NPVBackgroundViewController",
         @"_TtC35NowPlaying_ContentLayerPlatformImpl24AccessibleCollectionView",
-    ]);
+    ] mutableCopy];
+    if (canvas) {
+        %init(Canvas);
+        [classes addObject:@"_TtC17Canvas_CommonImpl20CanvasNowPlayingCell"];
+    }
+    SGRequireClasses(classes);
 }

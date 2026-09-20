@@ -23,10 +23,16 @@
 // Threading: main thread only.
 #import <UIKit/UIKit.h>
 
-@class SGRArtworkField;
+@class SGRArtworkField, SGModRow;
+
+// Spotify's looping Canvas video behind the artwork. Read at launch like every other switch; unset is
+// on. While one plays the field steps aside, because the field is what would cover it (PlayerField.x).
+#define SGRKeyCanvas @"spotifyglass.redesign.player.canvas"
 
 // The field behind the player, nil until the player has laid out once (PlayerField.x).
 SGRArtworkField *SGRPlayerField(void);
+// The Canvas switch's row, for the Player page (PlayerField.x).
+SGModRow *SGRCanvasRow(void);
 
 #pragma mark - the cover (PlayerArtwork.x)
 

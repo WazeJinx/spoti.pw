@@ -15,6 +15,7 @@
 #import "Redesigned/Lyrics/LyricsText.h"
 #import "Redesigned/Navbar/Navbar.h"
 #import "Redesigned/NowPlayingBar/NowPlayingBar.h"
+#import "Redesigned/Player/Player.h"
 #import "Redesigned/Kit/SGRAccent.h"
 
 NSString *const SGRedesignedUIInfo = @"The newest version of spoti.pw, leaning towards Apple Music's style. It is not compatible with the legacy look's settings.\n\nThe legacy look gives you more freedom, yet still looks like Spotify.";
@@ -89,8 +90,12 @@ UIViewController *SGPlayerSettingsPage(void) {
     }
     [pages addObject:SGWithSymbol(SGPageRow(@"Lock screen widget", ^UIViewController *{ return SGLockScreenWidgetPage(); }), @"lock")];
     [sections addObject:SGSection(nil, pages)];
-    if (native) [sections addObjectsFromArray:SGNativePlayerScreenSections()];
-    else [sections addObjectsFromArray:SGRVibrationsSections()];
+    if (native) {
+        [sections addObjectsFromArray:SGNativePlayerScreenSections()];
+    } else {
+        [sections addObject:SGSection(@"Player screen", @[SGRCanvasRow()])];
+        [sections addObjectsFromArray:SGRVibrationsSections()];
+    }
 
     NSString *intro = native ? @"Changes apply after you restart Spotify. Gestures and Blocked artists apply straight away."
                              : @"Changes apply after you restart Spotify. Gestures, Blocked artists and Vibrations apply straight away.";
